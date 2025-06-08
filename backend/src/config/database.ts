@@ -11,7 +11,10 @@ const pool = mysql.createPool({
   database: process.env.DB_NAME || 'file_market',
   waitForConnections: true,
   connectionLimit: 10,
-  queueLimit: 0
+  queueLimit: 0,
+  acquireTimeout: 60000,
+  timeout: 60000,
+  reconnect: true
 });
 
 export type QueryResult<T = any> = T[];
@@ -42,4 +45,14 @@ export async function transaction<T>(callback: (connection: mysql.Connection) =>
   }
 }
 
-export default pool; 
+// Test database connection
+export async function testConnection(): Promise<boolean> {
+  try {
+    await pool.execute('SELECT 1');
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
+export default pool;
