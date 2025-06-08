@@ -5,11 +5,11 @@ import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
 import Button from '../ui/Button';
 import CartDropdown from '../cart/CartDropdown';
+import SearchBar from '../search/SearchBar';
 
 const Header: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isCartOpen, setIsCartOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
   const location = useLocation();
   const { isAuthenticated, user, signOut } = useAuth();
   const { getItemCount } = useCart();
@@ -26,12 +26,6 @@ const Header: React.FC = () => {
 
   const toggleCart = () => {
     setIsCartOpen(!isCartOpen);
-  };
-
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    // Implement search logic here
-    console.log('Searching for:', searchQuery);
   };
 
   const isActive = (path: string) => {
@@ -85,20 +79,7 @@ const Header: React.FC = () => {
 
           {/* Search Form - Desktop */}
           <div className="hidden md:flex items-center flex-1 max-w-md mx-4">
-            <form onSubmit={handleSearch} className="w-full">
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Search files..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-                <div className="absolute left-3 top-2.5 text-gray-400">
-                  <Search size={18} />
-                </div>
-              </div>
-            </form>
+            <SearchBar placeholder="Search files..." />
           </div>
 
           {/* User Actions - Desktop */}
@@ -172,20 +153,9 @@ const Header: React.FC = () => {
         {isMenuOpen && (
           <div className="md:hidden mt-4 bg-white rounded-lg shadow-lg py-2">
             {/* Search Form - Mobile */}
-            <form onSubmit={handleSearch} className="px-4 py-2">
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Search files..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-                <div className="absolute left-3 top-2.5 text-gray-400">
-                  <Search size={18} />
-                </div>
-              </div>
-            </form>
+            <div className="px-4 py-2">
+              <SearchBar placeholder="Search files..." />
+            </div>
 
             {/* Navigation Links - Mobile */}
             <nav className="flex flex-col px-4 py-2">

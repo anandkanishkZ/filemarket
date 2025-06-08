@@ -9,6 +9,7 @@ import ScrollToTop from './components/ScrollToTop';
 // Pages
 import HomePage from './pages/HomePage';
 import BrowseFilesPage from './pages/BrowseFilesPage';
+import SearchPage from './pages/SearchPage';
 import FileDetailPage from './pages/FileDetailPage';
 import LoginPage from './pages/auth/LoginPage';
 import RegisterPage from './pages/auth/RegisterPage';
@@ -54,6 +55,7 @@ function App() {
             <Route path="/" element={<HomePage />} />
             <Route path="/browse" element={<BrowseFilesPage />} />
             <Route path="/browse/:category" element={<BrowseFilesPage />} />
+            <Route path="/search" element={<SearchPage />} />
             <Route path="/file/:fileId" element={<FileDetailPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
