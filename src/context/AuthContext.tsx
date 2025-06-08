@@ -1,136 +1,104 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User } from '@supabase/supabase-js';
-import { supabase, signIn, signUp, signOut, getProfile } from '../lib/supabase';
+import { createContext, useContext, useEffect, useState } from 'react';
+import { signIn, signUp, signOut } from '../data/apiService';
+import { Database } from '../types/database';
 
-interface Profile {
-  id: string;
-  name: string;
-  email: string;
-  is_admin: boolean;
-  created_at: string;
-  updated_at: string;
-}
+type Profile = Database['public']['Tables']['profiles']['Row'];
 
 interface AuthContextType {
-  user: User | null;
-  profile: Profile | null;
-  isAuthenticated: boolean;
-  isAdmin: boolean;
+  user: Profile | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  logout: () => Promise<void>;
-  register: (name: string, email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  isAuthenticated: boolean;
+  signIn: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string, name: string, confirmPassword: string) => Promise<void>;
+  signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-};
-
-interface AuthProviderProps {
-  children: ReactNode;
-}
-
-export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        loadProfile(session.user.id);
-      } else {
-        setLoading(false);
-      }
-    });
-
-    // Listen for auth changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        await loadProfile(session.user.id);
-      } else {
-        setProfile(null);
-        setLoading(false);
-      }
-    });
-
-    return () => subscription.unsubscribe();
+    // Check for stored session
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      const parsedUser = JSON.parse(storedUser);
+      // Normalize admin status to is_admin boolean
+      const normalizedUser = {
+        ...parsedUser,
+        is_admin: !!(parsedUser.is_admin || parsedUser.isAdmin)
+      };
+      setUser(normalizedUser);
+    }
+    setLoading(false);
   }, []);
 
-  const loadProfile = async (userId: string) => {
-    try {
-      const { data, error } = await getProfile(userId);
-      if (error) {
-        console.error('Error loading profile:', error);
-      } else {
-        setProfile(data);
-      }
-    } catch (error) {
-      console.error('Error loading profile:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const login = async (email: string, password: string) => {
+  const handleSignIn = async (email: string, password: string) => {
     try {
       const { data, error } = await signIn(email, password);
-      
-      if (error) {
-        return { success: false, error: error.message };
+      if (error) throw error;
+      if (data?.data?.user) {
+        // Normalize admin status from response
+        const userData = {
+          ...data.data.user,
+          is_admin: !!(data.data.user.is_admin || data.data.user.isAdmin)
+        };
+        setUser(userData);
+        localStorage.setItem('user', JSON.stringify(userData));
       }
-      
-      return { success: true };
     } catch (error) {
-      return { success: false, error: 'An unexpected error occurred' };
+      console.error('Error signing in:', error);
+      throw error;
     }
   };
 
-  const logout = async () => {
+  const handleSignUp = async (email: string, password: string, name: string, confirmPassword: string) => {
+    try {
+      const { data, error } = await signUp(email, password, name, confirmPassword);
+      if (error) throw error;
+      if (data?.user) {
+        // Normalize admin status from response
+        const userData = {
+          ...data.user,
+          is_admin: !!(data.user.is_admin || data.user.isAdmin)
+        };
+        setUser(userData);
+        localStorage.setItem('user', JSON.stringify(userData));
+      }
+    } catch (error) {
+      console.error('Error signing up:', error);
+      throw error;
+    }
+  };
+
+  const handleSignOut = async () => {
     try {
       await signOut();
       setUser(null);
-      setProfile(null);
+      localStorage.removeItem('user');
     } catch (error) {
       console.error('Error signing out:', error);
-    }
-  };
-
-  const register = async (name: string, email: string, password: string) => {
-    try {
-      const { data, error } = await signUp(email, password, name);
-      
-      if (error) {
-        return { success: false, error: error.message };
-      }
-      
-      return { success: true };
-    } catch (error) {
-      return { success: false, error: 'An unexpected error occurred' };
+      throw error;
     }
   };
 
   const value = {
     user,
-    profile,
-    isAuthenticated: !!user,
-    isAdmin: profile?.is_admin ?? false,
     loading,
-    login,
-    logout,
-    register,
+    isAuthenticated: !!user,
+    signIn: handleSignIn,
+    signUp: handleSignUp,
+    signOut: handleSignOut,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-};
+}
+
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+}

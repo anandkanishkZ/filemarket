@@ -11,7 +11,7 @@ const Header: React.FC = () => {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const location = useLocation();
-  const { isAuthenticated, currentUser, logout } = useAuth();
+  const { isAuthenticated, user, signOut } = useAuth();
   const { getItemCount } = useCart();
 
   const navLinks = [
@@ -126,7 +126,7 @@ const Header: React.FC = () => {
                   <User size={20} className="mr-1" />
                   <span>My Account</span>
                 </Link>
-                <Button variant="outline" onClick={logout}>
+                <Button variant="outline" onClick={signOut}>
                   Logout
                 </Button>
               </div>
@@ -218,7 +218,7 @@ const Header: React.FC = () => {
                     My Account
                   </Link>
                   <Button variant="outline" onClick={() => {
-                    logout();
+                    signOut();
                     setIsMenuOpen(false);
                   }}>
                     Logout

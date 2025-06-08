@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
+import { toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 import Button from '../../components/ui/Button';
 import { useAuth } from '../../context/AuthContext';
 import MainLayout from '../../components/layout/MainLayout';
@@ -14,7 +16,7 @@ const RegisterPage: React.FC = () => {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   
-  const { register } = useAuth();
+  const { signUp } = useAuth();
   const navigate = useNavigate();
 
   const togglePasswordVisibility = () => {
@@ -34,8 +36,15 @@ const RegisterPage: React.FC = () => {
       return;
     }
     
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters long');
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters long');
+      return;
+    }
+
+    // Password validation regex
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+    if (!passwordRegex.test(password)) {
+      setError('Password must contain at least one uppercase letter, one lowercase letter, one number and one special character');
       return;
     }
     
@@ -43,15 +52,27 @@ const RegisterPage: React.FC = () => {
     setIsLoading(true);
     
     try {
-      const result = await register(name, email, password);
-      
-      if (result.success) {
-        navigate('/dashboard');
-      } else {
-        setError(result.error || 'Registration failed');
-      }
-    } catch (err) {
-      setError('An error occurred. Please try again.');
+      await signUp(email, password, name, confirmPassword);
+      toast.success('Registration successful! Redirecting to dashboard...', {
+        position: "top-right",
+        autoClose: 3000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+      });
+      navigate('/dashboard');
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.message || err.message || 'An error occurred during registration. Please try again.';
+      setError(errorMessage);
+      toast.error(errorMessage, {
+        position: "top-right",
+        autoClose: 5000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+      });
       console.error('Registration error:', err);
     } finally {
       setIsLoading(false);

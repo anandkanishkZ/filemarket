@@ -15,18 +15,21 @@ export interface Database {
           name: string
           slug: string
           created_at: string
+          description: string | null
         }
         Insert: {
           id?: string
           name: string
           slug: string
           created_at?: string
+          description?: string | null
         }
         Update: {
           id?: string
           name?: string
           slug?: string
           created_at?: string
+          description?: string | null
         }
         Relationships: []
       }
@@ -42,6 +45,9 @@ export interface Database {
           is_free: boolean
           created_at: string
           updated_at: string
+          is_downloadable: boolean
+          download_limit_days: number | null
+          file_name: string
         }
         Insert: {
           id?: string
@@ -54,6 +60,9 @@ export interface Database {
           is_free?: boolean
           created_at?: string
           updated_at?: string
+          is_downloadable?: boolean
+          download_limit_days?: number | null
+          file_name?: string
         }
         Update: {
           id?: string
@@ -66,6 +75,9 @@ export interface Database {
           is_free?: boolean
           created_at?: string
           updated_at?: string
+          is_downloadable?: boolean
+          download_limit_days?: number | null
+          file_name?: string
         }
         Relationships: [
           {

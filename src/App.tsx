@@ -1,5 +1,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
 import ScrollToTop from './components/ScrollToTop';
@@ -28,13 +30,13 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
 // Admin route component
 const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { currentUser, isAuthenticated } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   
   if (!isAuthenticated) {
     return <Navigate to="/login" />;
   }
   
-  if (!currentUser?.isAdmin) {
+  if (!user?.is_admin) {
     return <Navigate to="/dashboard" />;
   }
   
@@ -47,6 +49,7 @@ function App() {
       <CartProvider>
         <Router>
           <ScrollToTop />
+          <ToastContainer />
           <Routes>
             <Route path="/" element={<HomePage />} />
             <Route path="/browse" element={<BrowseFilesPage />} />

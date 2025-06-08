@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
+import { toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 import Button from '../../components/ui/Button';
 import { useAuth } from '../../context/AuthContext';
 import MainLayout from '../../components/layout/MainLayout';
@@ -16,7 +18,7 @@ const LoginPage: React.FC = () => {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   
-  const { login } = useAuth();
+  const { signIn } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const state = location.state as LocationState;
@@ -38,15 +40,29 @@ const LoginPage: React.FC = () => {
     setIsLoading(true);
     
     try {
-      const result = await login(email, password);
-      
-      if (result.success) {
+      await signIn(email, password);
+      toast.success('Login successful! Redirecting to dashboard...', {
+        position: "top-right",
+        autoClose: 2000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+      });
+      setTimeout(() => {
         navigate(redirectTo);
-      } else {
-        setError(result.error || 'Login failed');
-      }
-    } catch (err) {
-      setError('An error occurred. Please try again.');
+      }, 1000);
+    } catch (err: any) {
+      const errorMessage = err.message || 'An error occurred during login. Please try again.';
+      setError(errorMessage);
+      toast.error(errorMessage, {
+        position: "top-right",
+        autoClose: 5000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+      });
       console.error('Login error:', err);
     } finally {
       setIsLoading(false);
@@ -140,13 +156,7 @@ const LoginPage: React.FC = () => {
             </div>
           </div>
           
-          <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
-            <p className="text-xs text-gray-500 text-center">
-              Demo accounts:<br />
-              Admin: admin@filemarket.com / password<br />
-              User: user@filemarket.com / password
-            </p>
-          </div>
+          
         </div>
       </div>
     </MainLayout>
