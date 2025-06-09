@@ -1,7 +1,7 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { query, testConnection } from './config/database';
+import { query, testConnection, healthCheck, initializeDatabase } from './config/database';
 import { logger } from './utils/logger';
 import { errorHandler } from './middleware/error.middleware';
 import { handlePublicApiRequests } from './middleware/public-api.middleware';
@@ -38,27 +38,18 @@ app.use(handlePublicApiRequests);
 // Health check route
 app.get('/api/health', async (req: Request, res: Response) => {
   try {
-    const dbConnected = await testConnection();
-    if (dbConnected) {
-      res.json({ 
-        status: 'ok',
-        database: 'connected',
-        timestamp: new Date().toISOString(),
-        uptime: process.uptime()
-      });
-    } else {
-      res.status(503).json({ 
-        status: 'error', 
-        database: 'disconnected',
-        error: 'Database connection failed' 
-      });
-    }
+    const dbHealth = await healthCheck();
+    res.json({ 
+      status: dbHealth.status,
+      database: dbHealth.message,
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime()
+    });
   } catch (err) {
     logger.error('Health check failed:', err);
     res.status(500).json({ 
       status: 'error', 
-      database: 'error',
-      error: 'Database connection failed' 
+      error: 'Health check failed' 
     });
   }
 });
@@ -81,6 +72,16 @@ app.use((req: Request, res: Response, next) => {
   logger.warn(`Unhandled route: ${req.method} ${req.originalUrl}`);
   res.status(404).json({ message: `Cannot ${req.method} ${req.originalUrl}` });
 });
+
+// Initialize database connection
+initializeDatabase()
+  .then(() => {
+    logger.info('Database initialized successfully');
+  })
+  .catch((error) => {
+    logger.error('Failed to initialize database:', error);
+    process.exit(1);
+  });
 
 // Check database connection before starting server
 async function startServer() {

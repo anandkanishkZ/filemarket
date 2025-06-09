@@ -3,15 +3,102 @@ import axios from 'axios';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
-type File = Database['public']['Tables']['files']['Row'];
+// Set up axios interceptor to add auth token to all requests
+axios.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+// Add response interceptor to handle 401 errors
+axios.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      // Clear token and redirect to login
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.href = '/login';
+    }
+    return Promise.reject(error);
+  }
+);
+
+// Type definitions
+type User = Database['public']['Tables']['profiles']['Row'] & {
+  is_active: boolean;
+};
+
 type Category = Database['public']['Tables']['categories']['Row'];
+type File = Database['public']['Tables']['files']['Row'];
 type Profile = Database['public']['Tables']['profiles']['Row'];
 type Purchase = Database['public']['Tables']['purchases']['Row'];
 
+// API Response type
+interface ApiResponse<T> {
+  data?: T;
+  error?: string;
+}
+
+// Extended types for API responses
+interface FileWithCategory extends File {
+  category: Category | null;
+}
+
+interface PurchaseWithDetails {
+  purchase_id: string;
+  amount: number;
+  purchase_status: string;
+  created_at: string;
+  file_title: string;
+  preview_url: string;
+  user_name: string;
+  user_email: string;
+  payment_method: string;
+  transaction_id: string;
+  payment_details: string;
+  verified_at: string;
+  download_count?: number;
+  last_downloaded_at?: string;
+}
+
+interface InvoiceDetails {
+  purchase_id: string;
+  amount: number;
+  purchase_status: string;
+  created_at: string;
+  file_title: string;
+  preview_url: string;
+  user_name: string;
+  user_email: string;
+  payment_method: string;
+  transaction_id: string;
+  payment_details: string;
+  verified_at: string;
+  download_count?: number;
+  last_downloaded_at?: string;
+}
+
 // File operations
-export const getFiles = async () => {
-  const response = await axios.get(`${API_URL}/files`);
-  return { data: response.data, error: null };
+export const getFiles = async (): Promise<ApiResponse<FileWithCategory[]>> => {
+  try {
+    const response = await axios.get(`${API_URL}/files`);
+    console.log('Frontend received files response:', response.data);
+    
+    if (response.data?.data) {
+      return { data: response.data.data };
+    } else if (Array.isArray(response.data)) {
+      return { data: response.data };
+    }
+    
+    console.warn('Non-array files data format:', response.data);
+    return { data: [] };
+  } catch (error: any) {
+    console.error('Error in getFiles API call:', error);
+    return { error: error.message || 'Failed to fetch files' };
+  }
 };
 
 export const getFileById = async (id: string) => {
@@ -44,27 +131,36 @@ export const deleteFile = async (id: string) => {
 };
 
 // Category operations
-export const getCategories = async () => {
+export const getCategories = async (): Promise<ApiResponse<Category[]>> => {
   try {
     const response = await axios.get(`${API_URL}/categories`);
-    const categories = response.data?.data || response.data;
+    console.log('Frontend received categories response:', response.data);
     
-    // Even if we get an invalid format, just return an empty array without error
-    if (!Array.isArray(categories)) {
-      console.warn('Non-array categories data format:', categories);
-      return { data: [], error: null };
+    if (response.data?.data) {
+      return { data: response.data.data };
+    } else if (Array.isArray(response.data)) {
+      return { data: response.data };
     }
-    return { data: categories, error: null };
+    
+    console.warn('Non-array categories data format:', response.data);
+    return { data: [] };
   } catch (error: any) {
     console.error('Error in getCategories API call:', error);
-    // Return empty array and no error to prevent breaking the dashboard
-    return { data: [], error: null };
+    return { error: error.message || 'Failed to fetch categories' };
   }
 };
 
-export const createCategory = async (category: Database['public']['Tables']['categories']['Insert']) => {
-  const response = await axios.post(`${API_URL}/categories`, category);
-  return { data: response.data, error: null };
+export const createCategory = async (category: Database['public']['Tables']['categories']['Insert']): Promise<ApiResponse<Category>> => {
+  try {
+    const response = await axios.post(`${API_URL}/categories`, category);
+    if (response.data?.data) {
+      return { data: response.data.data };
+    }
+    return { error: 'Invalid response format' };
+  } catch (error: any) {
+    console.error('Error creating category:', error);
+    return { error: error.response?.data?.message || error.message || 'Failed to create category' };
+  }
 };
 
 export const updateCategory = async (id: string, updates: Database['public']['Tables']['categories']['Update']) => {
@@ -78,27 +174,22 @@ export const deleteCategory = async (id: string) => {
 };
 
 // Purchase operations
-export const getPurchases = async (userId?: string) => {
-  const url = userId ? `${API_URL}/purchases?userId=${userId}` : `${API_URL}/purchases`;
+export const getPurchases = async (): Promise<ApiResponse<PurchaseWithDetails[]>> => {
   try {
-    const response = await axios.get(url);
+    const response = await axios.get(`${API_URL}/purchases`);
     console.log('Frontend received purchases response:', response.data);
     
-    // Handle both array and object responses
-    const purchases = response.data?.data || response.data;
-    if (!purchases) {
-      throw new Error('No purchases data received');
+    if (response.data?.data) {
+      return { data: response.data.data };
+    } else if (Array.isArray(response.data)) {
+      return { data: response.data };
     }
     
-    // Ensure we have an array
-    const purchasesArray = Array.isArray(purchases) ? purchases : [purchases];
-    return { data: purchasesArray, error: null };
+    console.warn('Non-array purchases data format:', response.data);
+    return { data: [] };
   } catch (error: any) {
     console.error('Error in getPurchases API call:', error);
-    return { 
-      data: [], 
-      error: new Error(error.response?.data?.message || error.message || 'Failed to fetch purchases') 
-    };
+    return { error: error.message || 'Failed to fetch purchases' };
   }
 };
 
@@ -200,22 +291,22 @@ export const signOut = async () => {
 };
 
 // Invoice operations
-export const getAllInvoices = async () => {
+export const getAllInvoices = async (): Promise<ApiResponse<InvoiceDetails[]>> => {
   try {
     const response = await axios.get(`${API_URL}/invoices`);
-    // Ensure we're returning an array of invoices
-    const invoices = response.data?.data || response.data || [];
-    if (!Array.isArray(invoices)) {
-      console.error('Invalid invoices data format:', invoices);
-      return { data: [], error: null }; // Return empty array instead of throwing
+    console.log('Frontend received invoices response:', response.data);
+    
+    if (response.data?.data) {
+      return { data: response.data.data };
+    } else if (Array.isArray(response.data)) {
+      return { data: response.data };
     }
-    return { data: invoices, error: null };
+    
+    console.warn('Non-array invoices data format:', response.data);
+    return { data: [] };
   } catch (error: any) {
     console.error('Error in getAllInvoices API call:', error);
-    return { 
-      data: [], // Return empty array instead of null
-      error: new Error(error.response?.data?.message || error.message || 'Failed to fetch invoices') 
-    };
+    return { error: error.message || 'Failed to fetch invoices' };
   }
 };
 
@@ -230,19 +321,31 @@ export const getInvoiceById = async (id: string) => {
 };
 
 // User operations
-export const getAllUsers = async () => {
+export const getAllUsers = async (): Promise<ApiResponse<User[]>> => {
   try {
     const response = await axios.get(`${API_URL}/users`);
-    const users = response.data?.data;
-    if (!Array.isArray(users)) {
-      throw new Error('Invalid users data format');
+    console.log('Frontend received users response:', response.data);
+    
+    if (response.data?.data) {
+      return { data: response.data.data };
+    } else if (Array.isArray(response.data)) {
+      return { data: response.data };
     }
-    return { data: users, error: null };
+    
+    console.warn('Non-array users data format:', response.data);
+    return { data: [] };
   } catch (error: any) {
     console.error('Error in getAllUsers API call:', error);
-    return { 
-      data: null, 
-      error: new Error(error.response?.data?.message || error.message || 'Failed to fetch users') 
-    };
+    return { error: error.message || 'Failed to fetch users' };
+  }
+};
+
+export const updateUser = async (userId: string, updates: Partial<User>): Promise<ApiResponse<User>> => {
+  try {
+    const response = await axios.put(`${API_URL}/users/${userId}`, updates);
+    return { data: response.data.data };
+  } catch (error: any) {
+    console.error('Error updating user:', error);
+    return { error: error.message || 'Failed to update user' };
   }
 }; 

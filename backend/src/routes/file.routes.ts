@@ -1,4 +1,15 @@
-import { Router } from 'express';
+import express from 'express';
+import { authenticate, requireAdmin } from '../middleware/auth.middleware';
+import { query } from '../config/database';
+import { logger } from '../utils/logger';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+import {
+  createFileSchema,
+  updateFileSchema
+} from '../validators/file.validator';
+import { validateRequest } from '../middleware/validate.middleware';
 import {
   getFiles,
   getFileById,
@@ -7,15 +18,41 @@ import {
   deleteFile,
   downloadFile
 } from '../controllers/file.controller';
-import { authenticate, requireAdmin } from '../middleware/auth.middleware';
-import { validateRequest } from '../middleware/validate.middleware';
-import { upload } from '../middleware/upload.middleware';
-import {
-  createFileSchema,
-  updateFileSchema
-} from '../validators/file.validator';
 
-const router = Router();
+interface File {
+  id: string;
+  title: string;
+  description: string;
+  category_id: string;
+  price: number;
+  preview_url: string;
+  download_url: string;
+  created_at: Date;
+  updated_at: Date;
+}
+
+interface QueryResult {
+  insertId: number;
+}
+
+const router = express.Router();
+
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadDir = path.join(__dirname, '../../uploads');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({ storage });
 
 // Public routes
 router.get('/', getFiles);

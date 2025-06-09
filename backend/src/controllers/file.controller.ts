@@ -15,7 +15,7 @@ if (!fs.existsSync(UPLOADS_DIR)) {
 // Get all files
 export const getFiles = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const [files] = await query(
+    const [rows] = await query(
       `SELECT f.*, c.name as category_name 
        FROM files f 
        LEFT JOIN categories c ON f.category_id = c.id 
@@ -24,7 +24,7 @@ export const getFiles = async (req: Request, res: Response, next: NextFunction) 
 
     res.json({
       status: 'success',
-      data: files
+      data: Array.isArray(rows) ? rows : []
     });
   } catch (error) {
     logger.error('Error fetching files:', error);
@@ -37,7 +37,7 @@ export const getFileById = async (req: Request, res: Response, next: NextFunctio
   try {
     const { id } = req.params;
 
-    const [files] = await query(
+    const [rows] = await query(
       `SELECT f.*, c.name as category_name 
        FROM files f 
        LEFT JOIN categories c ON f.category_id = c.id 
@@ -45,13 +45,13 @@ export const getFileById = async (req: Request, res: Response, next: NextFunctio
       [id]
     );
 
-    if (files.length === 0) {
+    if (!rows || rows.length === 0) {
       throw new AppError('File not found', 404);
     }
 
     res.json({
       status: 'success',
-      data: files[0]
+      data: rows[0]
     });
   } catch (error) {
     logger.error('Error fetching file by ID:', error);
@@ -137,16 +137,16 @@ export const updateFile = async (req: Request, res: Response, next: NextFunction
     const file = req.file;
 
     // Check if file exists
-    const [files] = await query(
+    const [rows] = await query(
       'SELECT * FROM files WHERE id = ?',
       [id]
     );
 
-    if (files.length === 0) {
+    if (!rows || rows.length === 0) {
       throw new AppError('File not found', 404);
     }
 
-    const oldFile = files[0];
+    const oldFile = rows[0];
 
     let updateFields: string[] = [];
     let updateValues: any[] = [];

@@ -37,7 +37,8 @@ import {
   getFileById,
   deletePurchase,
   getAllInvoices,
-  getAllUsers
+  getAllUsers,
+  updateUser
 } from '../../data/apiService';
 import Button from '../../components/ui/Button';
 import MainLayout from '../../components/layout/MainLayout';
@@ -54,6 +55,7 @@ type User = {
   email: string;
   is_admin: boolean;
   is_active: boolean;
+  created_at: string;
 };
 
 interface FileWithCategory extends File {
@@ -68,17 +70,20 @@ interface PurchaseWithDetails extends Purchase {
 }
 
 interface InvoiceDetails {
-  invoice_id: string;
   purchase_id: string;
-  user_id: string;
+  amount: number;
+  purchase_status: string;
+  created_at: string;
+  file_title: string;
+  preview_url: string;
   user_name: string;
   user_email: string;
-  file_id: string;
-  file_title: string;
-  item_price: number;
-  amount_paid: number;
-  purchase_date: string;
-  status: string;
+  payment_method: string;
+  transaction_id: string;
+  payment_details: string;
+  verified_at: string;
+  download_count?: number;
+  last_downloaded_at?: string;
 }
 
 const AdminDashboard: React.FC = () => {
@@ -90,6 +95,7 @@ const AdminDashboard: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [activeTab, setActiveTab] = useState('overview');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newCategorySlug, setNewCategorySlug] = useState('');
@@ -104,22 +110,31 @@ const AdminDashboard: React.FC = () => {
   const [newFileIsFree, setNewFileIsFree] = useState<boolean>(false);
   const [newFileIsDownloadable, setNewFileIsDownloadable] = useState<boolean>(true);
   const [newFileDownloadLimitDays, setNewFileDownloadLimitDays] = useState<number | null>(null);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [fileToUpload, setFileToUpload] = useState<any>(null);
+  const [selectedFile, setSelectedFile] = useState<FileWithCategory | null>(null);
+  const [fileToUpload, setFileToUpload] = useState<File | null>(null);
 
   useEffect(() => {
-    if (user) {
+    if (user?.is_admin) {
       loadData();
+    } else {
+      setLoading(false);
+      setError('You must be an admin to access this page');
     }
   }, [user]);
 
   const loadData = async () => {
     setLoading(true);
+    setError(null);
     try {
       // Load files
       const filesResponse = await getFiles();
       if (filesResponse.error) throw filesResponse.error;
-      setFiles(filesResponse.data || []);
+      if (Array.isArray(filesResponse.data)) {
+        setFiles(filesResponse.data);
+      } else {
+        console.warn('Non-array files data format:', filesResponse.data);
+        setFiles([]);
+      }
 
       // Load categories
       const categoriesResponse = await getCategories();
@@ -127,7 +142,7 @@ const AdminDashboard: React.FC = () => {
       if (Array.isArray(categoriesResponse.data)) {
         setCategories(categoriesResponse.data);
       } else {
-        console.error('Invalid categories data format:', categoriesResponse.data);
+        console.warn('Non-array categories data format:', categoriesResponse.data);
         setCategories([]);
       }
 
@@ -137,17 +152,19 @@ const AdminDashboard: React.FC = () => {
       if (Array.isArray(purchasesResponse.data)) {
         setPurchases(purchasesResponse.data);
       } else {
-        console.error('Invalid purchases data format:', purchasesResponse.data);
+        console.warn('Non-array purchases data format:', purchasesResponse.data);
         setPurchases([]);
       }
 
       // Load invoices
       const invoicesResponse = await getAllInvoices();
-      if (invoicesResponse.error) throw invoicesResponse.error;
-      if (Array.isArray(invoicesResponse.data)) {
+      if (invoicesResponse.error) {
+        console.warn('Error loading invoices:', invoicesResponse.error);
+        setInvoices([]);
+      } else if (Array.isArray(invoicesResponse.data)) {
         setInvoices(invoicesResponse.data);
       } else {
-        console.error('Invalid invoices data format:', invoicesResponse.data);
+        console.warn('Non-array invoices data format:', invoicesResponse.data);
         setInvoices([]);
       }
 
@@ -158,6 +175,7 @@ const AdminDashboard: React.FC = () => {
 
     } catch (error: any) {
       console.error('Error loading dashboard data:', error);
+      setError(error.message || 'Failed to load dashboard data');
       toast.error(error.message || 'Failed to load dashboard data');
     } finally {
       setLoading(false);
@@ -268,15 +286,20 @@ const AdminDashboard: React.FC = () => {
         description: newCategoryDescription
       };
       const { data, error } = await createCategory(categoryData);
-      if (error) throw error;
+      if (error) {
+        toast.error(error);
+        return;
+      }
       if (data) {
+        toast.success('Category created successfully');
         setNewCategoryName('');
         setNewCategorySlug('');
         setNewCategoryDescription('');
         await loadData();
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating category:', error);
+      toast.error(error.message || 'Failed to create category');
     }
   };
 
@@ -345,6 +368,40 @@ const AdminDashboard: React.FC = () => {
         console.error('Error deleting user:', error);
         toast.error(error.message || 'Failed to delete user');
       }
+    }
+  };
+
+  const handleToggleUserStatus = async (user: User) => {
+    try {
+      const { data, error } = await updateUser(user.id, {
+        ...user,
+        is_active: !user.is_active
+      });
+      
+      if (error) throw error;
+      
+      toast.success(`User ${user.is_active ? 'blocked' : 'unblocked'} successfully`);
+      await loadData(); // Reload the users list
+    } catch (error: any) {
+      console.error('Error toggling user status:', error);
+      toast.error(error.message || 'Failed to update user status');
+    }
+  };
+
+  const handleToggleAdminStatus = async (user: User) => {
+    try {
+      const { data, error } = await updateUser(user.id, {
+        ...user,
+        is_admin: !user.is_admin
+      });
+      
+      if (error) throw error;
+      
+      toast.success(`User ${user.is_admin ? 'removed from' : 'promoted to'} admin successfully`);
+      await loadData(); // Reload the users list
+    } catch (error: any) {
+      console.error('Error toggling admin status:', error);
+      toast.error(error.message || 'Failed to update admin status');
     }
   };
 
@@ -885,9 +942,6 @@ const AdminDashboard: React.FC = () => {
             <thead className="bg-gray-50">
               <tr>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Invoice ID
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Purchase ID
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -900,6 +954,9 @@ const AdminDashboard: React.FC = () => {
                   Amount
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Status
+                </th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Date
                 </th>
                 <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -909,14 +966,9 @@ const AdminDashboard: React.FC = () => {
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {invoices.map((invoice) => (
-                <tr key={invoice.invoice_id} className="hover:bg-gray-50">
+                <tr key={invoice.purchase_id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm font-medium text-gray-900">
-                      {invoice.invoice_id}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">
                       {invoice.purchase_id}
                     </div>
                   </td>
@@ -935,19 +987,30 @@ const AdminDashboard: React.FC = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900">
-                      ${invoice.amount_paid.toFixed(2)}
+                      ${invoice.amount.toFixed(2)}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                      invoice.purchase_status === 'completed' 
+                        ? 'bg-green-100 text-green-800' 
+                        : invoice.purchase_status === 'pending'
+                        ? 'bg-yellow-100 text-yellow-800'
+                        : 'bg-red-100 text-red-800'
+                    }`}>
+                      {invoice.purchase_status}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900">
-                      {new Date(invoice.purchase_date).toLocaleDateString()}
+                      {new Date(invoice.created_at).toLocaleDateString()}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <Button 
                       variant="outline" 
                       size="sm" 
-                      // onClick={() => handleViewInvoice(invoice.invoice_id)} // Implement this function if needed
+                      // onClick={() => handleViewInvoice(invoice.purchase_id)} // Implement this function if needed
                     >
                       <FileText size={16} className="mr-1" />
                       View
@@ -963,38 +1026,21 @@ const AdminDashboard: React.FC = () => {
   );
 
   const renderUsers = () => (
-    <div>
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-xl font-bold text-gray-800">Users</h2>
-        <button
-          onClick={() => setActiveTab('add-user')}
-          className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-        >
-          <UserPlus size={20} className="mr-2" />
-          Add User
-        </button>
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold">User Management</h2>
       </div>
 
-      <div className="bg-white rounded-lg shadow-md overflow-hidden">
+      <div className="bg-white rounded-lg shadow overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Name
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Email
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Role
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Status
-                </th>
-                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Actions
-                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Joined</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -1002,48 +1048,63 @@ const AdminDashboard: React.FC = () => {
                 <tr key={user.id}>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
-                      <div className="h-10 w-10 flex-shrink-0">
+                      <div className="flex-shrink-0 h-10 w-10">
                         <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
-                          <span className="text-gray-500 font-medium">
-                            {user.name?.charAt(0).toUpperCase()}
-                          </span>
+                          <User className="h-6 w-6 text-gray-500" />
                         </div>
                       </div>
                       <div className="ml-4">
                         <div className="text-sm font-medium text-gray-900">{user.name}</div>
+                        <div className="text-sm text-gray-500">{user.email}</div>
                       </div>
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{user.email}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                      user.is_admin ? 'bg-purple-100 text-purple-800' : 'bg-green-100 text-green-800'
+                      user.is_active 
+                        ? 'bg-green-100 text-green-800' 
+                        : 'bg-red-100 text-red-800'
                     }`}>
-                      {user.is_admin ? 'Admin' : 'User'}
+                      {user.is_active ? 'Active' : 'Blocked'}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                      user.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                    }`}>
-                      {user.is_active ? 'Active' : 'Inactive'}
-                    </span>
+                    {user.is_admin ? (
+                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-purple-100 text-purple-800">
+                        Admin
+                      </span>
+                    ) : (
+                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
+                        User
+                      </span>
+                    )}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <button
-                      onClick={() => handleEditUser(user)}
-                      className="text-blue-600 hover:text-blue-900 mr-4"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleDeleteUser(user.id)}
-                      className="text-red-600 hover:text-red-900"
-                    >
-                      Delete
-                    </button>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {new Date(user.created_at).toLocaleDateString()}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => handleToggleUserStatus(user)}
+                        className={`px-3 py-1 rounded-md text-sm font-medium ${
+                          user.is_active
+                            ? 'bg-red-100 text-red-700 hover:bg-red-200'
+                            : 'bg-green-100 text-green-700 hover:bg-green-200'
+                        }`}
+                      >
+                        {user.is_active ? 'Block' : 'Unblock'}
+                      </button>
+                      <button
+                        onClick={() => handleToggleAdminStatus(user)}
+                        className={`px-3 py-1 rounded-md text-sm font-medium ${
+                          user.is_admin
+                            ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200'
+                            : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                        }`}
+                      >
+                        {user.is_admin ? 'Remove Admin' : 'Make Admin'}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -1172,25 +1233,59 @@ const AdminDashboard: React.FC = () => {
     </div>
   );
 
+  if (!user?.is_admin) {
+    return (
+      <MainLayout>
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-red-600 mb-4">Access Denied</h1>
+            <p className="text-gray-600">You must be an admin to access this page.</p>
+            <Link to="/" className="text-blue-500 hover:underline mt-4 inline-block">
+              Return to Home
+            </Link>
+          </div>
+        </div>
+      </MainLayout>
+    );
+  }
+
+  if (loading) {
+    return (
+      <MainLayout>
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+            <p className="mt-4 text-gray-600">Loading dashboard data...</p>
+          </div>
+        </div>
+      </MainLayout>
+    );
+  }
+
+  if (error) {
+    return (
+      <MainLayout>
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-red-600 mb-4">Error</h1>
+            <p className="text-gray-600">{error}</p>
+            <button
+              onClick={loadData}
+              className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      </MainLayout>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-100">
       {renderSidebar()}
       <div className="ml-64 p-8">
-        {loading ? (
-          <div className="flex items-center justify-center h-screen">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-          </div>
-        ) : (
-          <div>
-            {activeTab === 'overview' && renderOverview()}
-            {activeTab === 'files' && renderFiles()}
-            {activeTab === 'categories' && renderCategories()}
-            {activeTab === 'purchases' && renderPurchases()}
-            {activeTab === 'invoices' && renderInvoices()}
-            {activeTab === 'users' && renderUsers()}
-            {activeTab === 'settings' && renderSettings()}
-          </div>
-        )}
+        {renderTabContent()}
       </div>
     </div>
   );

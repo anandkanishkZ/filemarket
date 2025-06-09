@@ -8,7 +8,7 @@ import { logger } from '../utils/logger';
 export const getUsers = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const [users] = await query(
-      'SELECT id, name, email, is_admin, is_verified, created_at FROM users'
+      'SELECT id, name, email, is_admin, created_at FROM profiles'
     );
 
     res.json({
@@ -26,7 +26,7 @@ export const getUserById = async (req: Request, res: Response, next: NextFunctio
     const { id } = req.params;
 
     const [users] = await query(
-      'SELECT id, name, email, is_admin, is_verified, created_at FROM users WHERE id = ?',
+      'SELECT id, name, email, is_admin, created_at FROM profiles WHERE id = ?',
       [id]
     );
 
@@ -47,11 +47,11 @@ export const getUserById = async (req: Request, res: Response, next: NextFunctio
 export const updateUser = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
-    const { name, email, is_admin, is_verified } = req.body;
+    const { name, email, is_admin } = req.body;
 
     // Check if user exists
     const [users] = await query(
-      'SELECT * FROM users WHERE id = ?',
+      'SELECT * FROM profiles WHERE id = ?',
       [id]
     );
 
@@ -61,8 +61,8 @@ export const updateUser = async (req: Request, res: Response, next: NextFunction
 
     // Update user
     await query(
-      'UPDATE users SET name = ?, email = ?, is_admin = ?, is_verified = ? WHERE id = ?',
-      [name, email, is_admin, is_verified, id]
+      'UPDATE profiles SET name = ?, email = ?, is_admin = ? WHERE id = ?',
+      [name, email, is_admin, id]
     );
 
     res.json({
@@ -81,7 +81,7 @@ export const deleteUser = async (req: Request, res: Response, next: NextFunction
 
     // Check if user exists
     const [users] = await query(
-      'SELECT * FROM users WHERE id = ?',
+      'SELECT * FROM profiles WHERE id = ?',
       [id]
     );
 
@@ -90,7 +90,7 @@ export const deleteUser = async (req: Request, res: Response, next: NextFunction
     }
 
     // Delete user
-    await query('DELETE FROM users WHERE id = ?', [id]);
+    await query('DELETE FROM profiles WHERE id = ?', [id]);
 
     res.json({
       status: 'success',
@@ -110,7 +110,7 @@ export const updateProfile = async (req: Request, res: Response, next: NextFunct
     // Check if email is already taken
     if (email) {
       const [existingUsers] = await query(
-        'SELECT * FROM users WHERE email = ? AND id != ?',
+        'SELECT * FROM profiles WHERE email = ? AND id != ?',
         [email, userId]
       );
 
@@ -121,7 +121,7 @@ export const updateProfile = async (req: Request, res: Response, next: NextFunct
 
     // Update profile
     await query(
-      'UPDATE users SET name = ?, email = ? WHERE id = ?',
+      'UPDATE profiles SET name = ?, email = ? WHERE id = ?',
       [name, email, userId]
     );
 

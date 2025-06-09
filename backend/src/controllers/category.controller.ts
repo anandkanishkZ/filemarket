@@ -3,24 +3,30 @@ import { query } from '../config/database';
 import { AppError } from '../middleware/error.middleware';
 import { logger } from '../utils/logger';
 
+interface Category {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
+interface QueryResult {
+  insertId: string;
+  affectedRows: number;
+}
+
 // Get all categories
-export const getCategories = async (req: Request, res: Response, next: NextFunction) => {  try {
-    // No authentication check - ensure this endpoint always returns data
-    let categories: any[] = [];
-    try {
-      categories = await query('SELECT * FROM categories ORDER BY name ASC');
-      logger.info('Categories retrieved successfully:', {
-        count: categories.length
-      });
-    } catch (dbError) {
-      logger.error('Error fetching categories from database:', dbError);
-      // Continue with empty array if database query fails
-    }
-    
-    // ALWAYS return a data array, even if empty
-    res.json({ status: 'success', data: Array.isArray(categories) ? categories : [] });
+export const getCategories = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const [rows] = await query<Category[]>('SELECT * FROM categories ORDER BY name ASC');
+    res.json({ 
+      status: 'success', 
+      data: Array.isArray(rows) ? rows : []
+    });
   } catch (error) {
-    logger.error('Error in categories controller:', error);
+    logger.error('Error fetching categories:', error);
     next(error);
   }
 };
@@ -29,13 +35,13 @@ export const getCategories = async (req: Request, res: Response, next: NextFunct
 export const getCategoryById = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
-    const [categories] = await query('SELECT * FROM categories WHERE id = ?', [id]);
+    const [rows] = await query<Category[]>('SELECT * FROM categories WHERE id = ?', [id]);
 
-    if (categories.length === 0) {
+    if (!rows || rows.length === 0) {
       throw new AppError('Category not found', 404);
     }
 
-    res.json({ status: 'success', data: categories[0] });
+    res.json({ status: 'success', data: rows[0] });
   } catch (error) {
     logger.error('Error fetching category by ID:', error);
     next(error);
@@ -48,20 +54,32 @@ export const createCategory = async (req: Request, res: Response, next: NextFunc
     const { name, slug, description } = req.body;
     
     // Check if category name or slug already exists
-    const [existing] = await query('SELECT id FROM categories WHERE name = ? OR slug = ?', [name, slug]);
-    if (existing.length > 0) {
+    const [existing] = await query<Category[]>(
+      'SELECT id FROM categories WHERE name = ? OR slug = ?', 
+      [name, slug]
+    );
+    if (existing && existing.length > 0) {
       throw new AppError('Category with this name or slug already exists', 400);
     }
 
-    const [result] = await query(
-      `INSERT INTO categories (name, slug, description) VALUES (?, ?, ?)`,
+    const [result] = await query<QueryResult>(
+      `INSERT INTO categories (id, name, slug, description) VALUES (UUID(), ?, ?, ?)`,
       [name, slug, description]
     );
 
+    // Fetch the newly created category
+    const [newCategory] = await query<Category[]>(
+      'SELECT * FROM categories WHERE id = ?', 
+      [result.insertId]
+    );
+
+    if (!newCategory || newCategory.length === 0) {
+      throw new AppError('Failed to create category', 500);
+    }
+
     res.status(201).json({
       status: 'success',
-      message: 'Category created successfully',
-      data: { id: result.insertId, name, slug, description }
+      data: newCategory[0]
     });
   } catch (error) {
     logger.error('Error creating category:', error);
@@ -76,23 +94,26 @@ export const updateCategory = async (req: Request, res: Response, next: NextFunc
     const { name, slug, description } = req.body;
 
     // Check if category exists
-    const [existingCategory] = await query('SELECT id FROM categories WHERE id = ?', [id]);
-    if (existingCategory.length === 0) {
+    const [existingCategory] = await query<Category[]>(
+      'SELECT id FROM categories WHERE id = ?', 
+      [id]
+    );
+    if (!existingCategory || existingCategory.length === 0) {
       throw new AppError('Category not found', 404);
     }
 
     // Check for duplicate name/slug if they are being updated
     if (name || slug) {
-      const [duplicate] = await query(
+      const [duplicate] = await query<Category[]>(
         'SELECT id FROM categories WHERE (name = ? OR slug = ?) AND id != ?',
         [name, slug, id]
       );
-      if (duplicate.length > 0) {
+      if (duplicate && duplicate.length > 0) {
         throw new AppError('Another category with this name or slug already exists', 400);
       }
     }
 
-    const [result] = await query(
+    const [result] = await query<QueryResult>(
       `UPDATE categories SET name = IFNULL(?, name), slug = IFNULL(?, slug), description = IFNULL(?, description) WHERE id = ?`,
       [name, slug, description, id]
     );
@@ -101,10 +122,15 @@ export const updateCategory = async (req: Request, res: Response, next: NextFunc
       throw new AppError('Category update failed', 500);
     }
 
+    // Fetch updated category
+    const [updatedCategory] = await query<Category[]>(
+      'SELECT * FROM categories WHERE id = ?',
+      [id]
+    );
+
     res.json({
       status: 'success',
-      message: 'Category updated successfully',
-      data: { id, name, slug, description }
+      data: updatedCategory[0]
     });
   } catch (error) {
     logger.error('Error updating category:', error);
@@ -117,7 +143,7 @@ export const deleteCategory = async (req: Request, res: Response, next: NextFunc
   try {
     const { id } = req.params;
 
-    const [result] = await query('DELETE FROM categories WHERE id = ?', [id]);
+    const [result] = await query<QueryResult>('DELETE FROM categories WHERE id = ?', [id]);
 
     if (result.affectedRows === 0) {
       throw new AppError('Category not found', 404);

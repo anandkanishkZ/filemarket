@@ -6,7 +6,14 @@ import { logger } from '../utils/logger';
 
 interface JwtPayload {
   id: string;
-  isAdmin: boolean;
+  isAdmin?: boolean;
+  is_admin?: boolean;
+}
+
+interface User {
+  id: string;
+  email: string;
+  is_admin: boolean;
 }
 
 declare global {
@@ -54,16 +61,21 @@ export const authenticate = async (
     }
 
     // Get user from database
-    const users = await query(
-      'SELECT id, email, is_admin FROM users WHERE id = ?',
+    const [rows] = await query<User[]>(
+      'SELECT id, email, is_admin FROM profiles WHERE id = ?',
       [decoded.id]
     );
 
-    if (users.length === 0) {
+    if (!rows || rows.length === 0) {
       logger.warn(`Authentication failed: User not found with id ${decoded.id}`);
       throw new AppError('User not found', 401);
-    }    // Add user to request
-    req.user = users[0];
+    }
+
+    // Add user to request
+    const user = rows[0];
+    // Normalize admin status
+    user.is_admin = !!(user.is_admin || decoded.isAdmin || decoded.is_admin);
+    req.user = user;
     logger.info(`User ${req.user?.email} authenticated successfully`);
 
     next();
